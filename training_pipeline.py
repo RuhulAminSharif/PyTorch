@@ -94,14 +94,6 @@ else:
 
 logger.info(f"Using device: {device}")
 
-# pin_memory only helps (and is only valid) on CUDA; on CPU/MPS
-# it's wasted or can even error out on some setups.
-use_pin_memory = device.type == "cuda"
-# IMPROVEMENT: num_workers > 0 can hang/error on Windows or in notebook
-# environments unless guarded by `if __name__ == "__main__"`. We set it
-# conditionally and wrap execution below.
-num_workers = 2 if os.name != "nt" else 0
-
 
 # ==============================================================================
 # 3. DATA LOADING & PREPARATION
@@ -250,13 +242,21 @@ class SimpleNN(nn.Module):
     def __init__(self, num_features):
         super().__init__()
         # Defining layers
-        self.linear = nn.Linear(num_features, 1)
-        self.sigmoid = nn.Sigmoid()
+        self.network = nn.Sequential(
+            nn.Linear(num_features, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(64, 1),
+            nn.Sigmoid(),
+        )
 
     def forward(self, features):
-        out = self.linear(features)
-        out = self.sigmoid(out)
-        return out
+        return self.network(features)
 
 
 # ==============================================================================
@@ -362,6 +362,8 @@ def train(cfg: Config) -> tuple[nn.Module, str]:
                 model_save_path,
             )
             checkpoint_msg = " -> Model Saved!"
+        else:
+            checkpoint_msg = ""
 
         history.append(
             {
